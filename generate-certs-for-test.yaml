@@ -1,0 +1,31 @@
+- name: Generate certificate and key for testing
+  hosts: all
+  #become: true
+  vars:
+    key_path: "./tls.key"
+    crt_path: "./tls.crt"
+    subj: "/C=US/ST=TX/L=DALLAS/O=WF/OU=FHP/CN=app.sha.wf.com"
+
+  tasks:
+    # - name: Ensure private key exists
+    #   community.crypto.openssl_privatekey:
+    #     path: "{{ key_path }}"
+    #     size: 2048
+    #     state: present
+    #     type: RSA
+
+    # - name: Generate self signed cert
+    #   community.crypto.x509_certificate:
+    #     path: "{{ crt_path }}"
+    #     privatekey_path: "{{ key_path }}"
+    #     provider: selfsigned
+    #     selfsigned_not_after: "+365d"
+    #     selfsigned_digest: "sha256"
+      - name: Convert PKCS12 to JKS
+        ansible.builtin.shell: |
+          openssl req -x509 -newkey rsa:4096 \
+            -keyout {{key_path}} \
+            -out {{crt_path}} \
+            -sha256 -days 3650 \
+            -nodes \
+            -subj "{{subj}}"

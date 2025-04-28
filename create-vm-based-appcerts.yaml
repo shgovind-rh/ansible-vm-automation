@@ -1,0 +1,53 @@
+- name: Crate VM based application certs
+  hosts: all
+  #become: true
+  gather_facts: yes
+  vars:
+    cert_crt: "./tls.crt"
+    cert_key: "./tls.key"
+    pkcs12_file: "./keystore.p12"
+    jks_file: "./keystore.jks"
+    keystore_pass: "changeit"
+    alias_name: "myvmcert"
+
+  tasks:
+    - name: Check if VM is java enabled
+      ansible.builtin.command: java -version
+      register: java_ver_chk
+      ignore_errors: true
+
+    - name: Manage App Certs for Windows VM
+      debug:
+        msg: "This is a Windows host"
+      when: ansible_facts['os_family'] == 'Windows'
+
+
+    - name: Manage App Certs for Java enabled non Windows VM
+      block:
+        - name: Generate PKCS12 keystore
+          community.crypto.openssl_pkcs12:
+            path: "{{ pkcs12_file }}"
+            friendly_name: "{{ alias_name }}"
+            # name: "{{ alias_name }}"
+            privatekey_path: "{{ cert_key }}"
+            certificate_path: "{{ cert_crt }}"
+            passphrase: "{{ keystore_pass }}"
+            state: present
+        - name: Convert PKCS12 to JKS
+          ansible.builtin.shell: |
+            keytool -importkeystore \
+            -destkeystore {{ jks_file }} \
+            -srckeystore {{ pkcs12_file }} \
+            -srcstoretype PKCS12 \
+            -srcstorepass {{ keystore_pass }} \
+            -deststorepass {{ keystore_pass }} \
+            -noprompt
+          args:
+            creates: "{{ jks_file }}"
+          register: jks_import_result                         
+        - name: Remove PKCS12 file
+          ansible.builtin.file:
+            path: "{{ pkcs12_file }}"
+            state: absent
+          when: jks_import_result.changed
+      when: java_ver_chk.rc == 0
