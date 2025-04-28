@@ -1,0 +1,15 @@
+{
+  "certificate_spec": [
+    {
+      "name": "appcert1",
+      "key": {
+        "destPath": ".",
+        "uri": "https://www.example.com/tls.key"
+      },
+      "cert": {
+        "destPath": ".",
+        "uri": "https://www.example.com/tls.crt"
+      }
+    }
+  ]
+}

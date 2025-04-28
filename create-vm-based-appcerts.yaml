@@ -3,14 +3,19 @@
   #become: true
   gather_facts: yes
   vars:
-    cert_crt: "./tls.crt"
-    cert_key: "./tls.key"
+    #cert_spec_file: "./sample-certs-config.json"
     pkcs12_file: "./keystore.p12"
     jks_file: "./keystore.jks"
-    keystore_pass: "changeit"
-    alias_name: "myvmcert"
+    keystore_pass: "changeit"    
+    # cert_crt: "./tls.crt"
+    # cert_key: "./tls.key"
+    # alias_name: "myvmcert"
 
   tasks:
+    - name: Load certificate spec
+      ansible.builtin.set_fact:
+        certificate_spec: "{{ (lookup('file', './sample-certs-config.json') | from_json) }}"
+
     - name: Check if VM is java enabled
       ansible.builtin.command: java -version
       register: java_ver_chk
@@ -27,27 +32,32 @@
         - name: Generate PKCS12 keystore
           community.crypto.openssl_pkcs12:
             path: "{{ pkcs12_file }}"
-            friendly_name: "{{ alias_name }}"
+            friendly_name: "{{ item.name }}" #"{{ alias_name }}"
             # name: "{{ alias_name }}"
-            privatekey_path: "{{ cert_key }}"
-            certificate_path: "{{ cert_crt }}"
+            privatekey_path: "{{ item.key.destPath }}/tls.key" #"{{ cert_key }}"
+            certificate_path: "{{ item.cert.destPath }}/tls.crt" #"{{ cert_crt }}"
             passphrase: "{{ keystore_pass }}"
             state: present
+          loop: "{{ certificate_spec.certificate_spec }}" 
+
         - name: Convert PKCS12 to JKS
           ansible.builtin.shell: |
             keytool -importkeystore \
-            -destkeystore {{ jks_file }} \
-            -srckeystore {{ pkcs12_file }} \
+            -destkeystore {{ item.cert.destPath }}/{{ jks_file }} \
+            -srckeystore {{ item.cert.destPath }}/{{ pkcs12_file }} \
             -srcstoretype PKCS12 \
             -srcstorepass {{ keystore_pass }} \
             -deststorepass {{ keystore_pass }} \
             -noprompt
           args:
             creates: "{{ jks_file }}"
-          register: jks_import_result                         
+          register: jks_import_result    
+          loop: "{{ certificate_spec.certificate_spec }}"   
+
         - name: Remove PKCS12 file
           ansible.builtin.file:
-            path: "{{ pkcs12_file }}"
+            path: "{{ item.cert.destPath }}/{{ pkcs12_file }}"
             state: absent
           when: jks_import_result.changed
+          loop: "{{ certificate_spec.certificate_spec }}"  
       when: java_ver_chk.rc == 0
